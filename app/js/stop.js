@@ -56,9 +56,9 @@ export class NearbyStops extends Component{
 		url = `${NEXBUS_BASE_URI}command=routeConfig&a=${MUNI}&terse`
 		getXmlFromApiAsync(url).then((doc) => {
 			var stopList = this._getAllStops(doc);
-
+			alert(stopList)
 			AsyncStorage.setItem('stopList',JSON.stringify(stopList))
-      .then(json => this.setState({stopList: json}))
+      .then(json => this.setState({stopList: stopList}))
       .catch(error => console.log('error!'));
 		})
 	}
@@ -90,12 +90,12 @@ class StopList {
 	}
 
 	getRouteStops(route_xml){
-		var stopList = []
+		var stopList = [];
 		for (var s = 0; s < this.stops.length; s++){
 			stop = new Stop(this.route, this.stops[s]);
 			stopList.push(stop)
 		}
-		this._setDirections(stopList)
+		this._setDirections(stopList);
 		return stopList;
 	}
 
