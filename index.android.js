@@ -12,12 +12,9 @@ import {
 
 
 import {SideDrawerLayout} from './app/jsx/sidedrawer.js';
-import {StopList} from './app/js/stop.js'
+import {NearbyStops} from './app/js/stop.js'
 
 class reactTest extends Component {
-  componentDidMount() {
-    var stoplist = new StopList();
-  }
   render() {
     return (
       <View style={styles.container}>
@@ -26,6 +23,7 @@ class reactTest extends Component {
        barStyle="light-content"
      />
       <SideDrawerLayout>
+      <NearbyStops/>
        <View style={styles.row}>
           <View style={styles.col}>
           </View>
