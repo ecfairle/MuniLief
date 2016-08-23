@@ -15,6 +15,14 @@ import {SideDrawerLayout} from './app/jsx/sidedrawer.js';
 import {NearbyStops} from './app/js/stop.js'
 
 class reactTest extends Component {
+  constructor(props) {
+    super(props);
+  
+    this.state = {
+      
+    };
+  }
+
   render() {
     return (
       <View style={styles.container}>

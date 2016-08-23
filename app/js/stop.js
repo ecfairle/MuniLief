@@ -4,8 +4,10 @@ import {
 	View,
 	Text,
 	ListView,
-	AsyncStorage
+	AsyncStorage,
+	ActivityIndicator
 } from 'react-native';
+import {mdl, MKSpinner} from 'react-native-material-kit';
 
 NEXBUS_BASE_URI = 'http://webservices.nextbus.com/service/publicXMLFeed?';
 MUNI = 'sf-muni';
@@ -21,6 +23,27 @@ class Stop {
 		this.predictions = [];
 	}
 }
+
+class Prediction extends Component {
+  render() {
+    var stop = this.props.stop;
+    predictions = setPredictions(stop.predictions);
+
+    return (
+      <li className="mdl-list__item mdl-list__item--three-line">
+        <span className="mdl-list__item-primary-content">
+        <i className="material-icons md-36 md-light mdl-list__item-avatar">directions_bus</i>
+          <span>
+            Route: {stop.route} -- {predictions.join(', ')}
+          </span>
+          <span className="mdl-list__item-text-body">
+            {stop.direction} at {stop.title}
+          </span>
+        </span>
+      </li>
+    );
+  }
+};
 
 getXmlFromApiAsync = function(url) {
   return fetch(url)
@@ -40,9 +63,45 @@ export class NearbyStops extends Component{
 		super(props);
 	  this.state = {
 	  	stopList : [],
-	  	nearbyStops : []
+	  	nearbyStops : [],
+	  	currentPosition: 'unknown',
+	  	stopsLoaded : false
 	  };
-	  this._loadInitialState();
+	  this._loadInitialState().then(() => this._getNearbyStops());
+	}
+
+	componentDidMount() {
+		setInterval(() => this._getNearbyStops(), 20000);
+	}
+
+	_getNearbyStops(){
+		navigator.geolocation.getCurrentPosition(
+      (position) => {
+        var currentPosition = JSON.stringify(position);
+        this.setState({currentPosition});
+        this._closestStops(position);
+      },
+      (error) => alert(error.message),
+      {enableHighAccuracy: true, timeout: 20000, maximumAge: 1000}
+    );
+	}
+
+	_closestStops(position){
+		var lon = position.coords.longitude;
+		var lat = position.coords.latitude;
+		var closeStops = this.state.stopList.filter((stop) => 
+				(Math.pow(parseFloat(stop.lon) - lon, 2) + 
+				 Math.pow(parseFloat(stop.lat) - lat, 2)) < .00005);
+
+		closeStops.sort((stop1,stop2) => 
+				(Math.pow(parseFloat(stop1.lon) - lon, 2) + 
+				 Math.pow(parseFloat(stop1.lat) - lat, 2)) -
+
+				(Math.pow(parseFloat(stop2.lon) - lon, 2) + 
+				 Math.pow(parseFloat(stop2.lat) - lat, 2))
+				);
+
+		this.setState({nearbyStops: closeStops});
 	}
 
 	_loadInitialState(){
@@ -56,7 +115,6 @@ export class NearbyStops extends Component{
 		url = `${NEXBUS_BASE_URI}command=routeConfig&a=${MUNI}&terse`
 		getXmlFromApiAsync(url).then((doc) => {
 			var stopList = this._getAllStops(doc);
-			alert(stopList)
 			AsyncStorage.setItem('stopList',JSON.stringify(stopList))
       .then(json => this.setState({stopList: stopList}))
       .catch(error => console.log('error!'));
@@ -71,16 +129,33 @@ export class NearbyStops extends Component{
 			stopList = stopList.concat(routeStops.getRouteStops());
 		}
 		return stopList;
-	}
+	}  
 
 	render() {
+		var stopItems = this.state.nearbyStops.slice(0,20).map((stop) => <Text>{JSON.stringify(stop)}</Text>);
 		return (
-			<View>
-				<Text>{JSON.stringify(this.state.stopList[1])}</Text>
+			<View>	
+				{ this.state.nearbyStops.length > 0 ? this.state.nearbyStops.slice(0,20).map((stop) => <Text>{JSON.stringify(stop)}</Text>) : <Spinner/> }
 			</View>
 		);
 	}
 }
+
+class Spinner extends Component {
+	render() {
+		return (
+			<View style = {{height: 500, flex: 1,
+    	justifyContent: 'center',
+    	alignItems: 'center'}}>	
+	    <ActivityIndicator
+	       size="large"
+	       color="orange"
+	     />
+    </View>
+		);
+	}
+}
+
 
 class StopList {
 	constructor(route_xml) {
