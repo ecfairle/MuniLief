@@ -9,8 +9,20 @@ import {
 } from 'react-native';
 import {mdl, MKSpinner} from 'react-native-material-kit';
 
-NEXBUS_BASE_URI = 'http://webservices.nextbus.com/service/publicXMLFeed?';
+NEXTBUS_BASE_URI = 'http://webservices.nextbus.com/service/publicXMLFeed?';
 MUNI = 'sf-muni';
+
+uniqueRouteDirs = function(stops){
+	var unique = {};
+	var distinct = [];
+	for( var i in stops ){
+	 if( typeof(unique[stops[i].route + stops[i].direction]) == "undefined"){
+	  distinct.push(stops[i]);
+	 }
+	 unique[stops[i].route + stops[i].direction] = 0;
+	}
+	return distinct;
+}
 
 class Stop {
 	constructor(route, stop_xml) {
@@ -67,26 +79,33 @@ export class NearbyStops extends Component{
 	  	currentPosition: 'unknown',
 	  	stopsLoaded : false
 	  };
-	  this._loadInitialState().then(() => this._getNearbyStops());
+	  this._loadInitialState().then(() => this._setPredictions());
 	}
 
 	componentDidMount() {
-		setInterval(() => this._getNearbyStops(), 20000);
+		setInterval(() => this._setPredictions(), 20000);
 	}
 
-	_getNearbyStops(){
+	_setPredictions(){
 		navigator.geolocation.getCurrentPosition(
       (position) => {
         var currentPosition = JSON.stringify(position);
         this.setState({currentPosition});
-        this._closestStops(position);
+        this._getNearbyStops(position);
+        this._getPredictions()
       },
       (error) => alert(error.message),
       {enableHighAccuracy: true, timeout: 20000, maximumAge: 1000}
     );
 	}
 
-	_closestStops(position){
+	_getPredictions(){
+		routeAndTag = this.state.nearbyStops.map((stop) => `stops=${stop.route}|${stop.tag}`)
+		URL = `${NEXTBUS_BASE_URI}command=predictionsForMultiStops&a=${MUNI}&${routeAndTag.join('&')}`;
+		getXmlFromApiAsync(URL).then((doc) => alert(doc))
+	}
+
+	_getNearbyStops(position){
 		var lon = position.coords.longitude;
 		var lat = position.coords.latitude;
 		var closeStops = this.state.stopList.filter((stop) => 
@@ -101,6 +120,7 @@ export class NearbyStops extends Component{
 				 Math.pow(parseFloat(stop2.lat) - lat, 2))
 				);
 
+		closeStops = uniqueRouteDirs(closeStops);
 		this.setState({nearbyStops: closeStops});
 	}
 
@@ -112,9 +132,10 @@ export class NearbyStops extends Component{
 	}
 
 	_loadStops(){
-		url = `${NEXBUS_BASE_URI}command=routeConfig&a=${MUNI}&terse`
+		url = `${NEXTBUS_BASE_URI}command=routeConfig&a=${MUNI}&terse`
 		getXmlFromApiAsync(url).then((doc) => {
 			var stopList = this._getAllStops(doc);
+
 			AsyncStorage.setItem('stopList',JSON.stringify(stopList))
       .then(json => this.setState({stopList: stopList}))
       .catch(error => console.log('error!'));

@@ -73,6 +73,7 @@ export class SearchFilter extends Component {
 
 	render() {
 		var searchString = this.state.searchString.trim().toLowerCase();
+		
 		if(searchString.length > 0){
         stops = stops.filter( (stop) => stop.route.toLowerCase().match( searchString ) );
     }
