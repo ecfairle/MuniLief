@@ -73,11 +73,15 @@ getXmlFromApiAsync = function(url) {
 export class NearbyStops extends Component{
 	constructor(props) {
 		super(props);
+
+		const ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
+
 	  this.state = {
 	  	stopList : [],
 	  	nearbyStops : [],
 	  	currentPosition: 'unknown',
-	  	stopsLoaded : false
+	  	timesLoaded : false,
+	  	dataSource: ds.cloneWithRows(['row 1', 'row 2']),
 	  };
 	  this._loadInitialState().then(() => this._setPredictions());
 	}
@@ -91,28 +95,48 @@ export class NearbyStops extends Component{
       (position) => {
         var currentPosition = JSON.stringify(position);
         this.setState({currentPosition});
-        this._getNearbyStops(position);
-        this._getPredictions()
+        nearbyStops = this._getNearbyStops(position);
+        this._getPredictions(nearbyStops);
       },
-      (error) => alert(error.message),
+      (error) => console.log(error.message),
       {enableHighAccuracy: true, timeout: 20000, maximumAge: 1000}
     );
 	}
 
-	_getPredictions(){
-		routeAndTag = this.state.nearbyStops.map((stop) => `stops=${stop.route}|${stop.tag}`)
+	_getPredictions(stops){
+		routeAndTag = stops.map((stop) => `stops=${stop.route}|${stop.tag}`)
 		URL = `${NEXTBUS_BASE_URI}command=predictionsForMultiStops&a=${MUNI}&${routeAndTag.join('&')}`;
-		getXmlFromApiAsync(URL).then((doc) => alert(doc))
+		console.log(URL)
+		getXmlFromApiAsync(URL).then((doc) => {
+			predictions = doc.getElementsByTagName('predictions') || [];
+			for (var i = 0; i < predictions.length; i++){
+				routeTag = predictions[i].getAttribute('routeTag');
+				if (predictions[i].getElementsByTagName('direction').length == 0) continue;
+				direction = predictions[i].getElementsByTagName('direction')[0].getAttribute('title');
+				console.log(JSON.stringify(stops.find((stop) => stop.route == routeTag && stop.direction.slice(0,8) == direction.slice(0,8))));
+				console.log('-----------------------------');
+				cur_predictions = Array.from(predictions[i].getElementsByTagName('prediction') || []).map((stop) => stop.getAttribute('minutes'));
+				console.log(cur_predictions)
+				stops.find((stop) => stop.route == routeTag && stop.direction.slice(0,8) == direction.slice(0,8)).predictions = cur_predictions;
+			}
+			this.setState({ 
+				nearbyStops: stops,
+				timesLoaded: true
+			});
+		})
+		.catch((error) => {
+	    console.error(error);
+	  });
 	}
 
 	_getNearbyStops(position){
 		var lon = position.coords.longitude;
 		var lat = position.coords.latitude;
-		var closeStops = this.state.stopList.filter((stop) => 
+		var nearbyStops = this.state.stopList.filter((stop) => 
 				(Math.pow(parseFloat(stop.lon) - lon, 2) + 
 				 Math.pow(parseFloat(stop.lat) - lat, 2)) < .00005);
 
-		closeStops.sort((stop1,stop2) => 
+		nearbyStops.sort((stop1,stop2) => 
 				(Math.pow(parseFloat(stop1.lon) - lon, 2) + 
 				 Math.pow(parseFloat(stop1.lat) - lat, 2)) -
 
@@ -120,22 +144,31 @@ export class NearbyStops extends Component{
 				 Math.pow(parseFloat(stop2.lat) - lat, 2))
 				);
 
-		closeStops = uniqueRouteDirs(closeStops);
-		this.setState({nearbyStops: closeStops});
+		nearbyStops = uniqueRouteDirs(nearbyStops);
+		return nearbyStops;
 	}
 
-	_loadInitialState(){
-		return AsyncStorage.getItem('stopList')
-      .then(req => JSON.parse(req))
-      .then(json => this.setState({stopList : json}))
-      .catch(error => this._loadStops());
+	async _loadInitialState(){
+		try{
+			value = await AsyncStorage.getItem('stopList')
+			if(value == null){
+				this._loadStops();
+				console.log('couldn\'t find stops')
+			}
+			else {
+				this.setState({stopList: JSON.parse(value)})
+				console.log('found stops');
+			}
+	  }
+	  catch(err) {
+	  	console.log(err);
+	  }
 	}
 
 	_loadStops(){
 		url = `${NEXTBUS_BASE_URI}command=routeConfig&a=${MUNI}&terse`
 		getXmlFromApiAsync(url).then((doc) => {
 			var stopList = this._getAllStops(doc);
-
 			AsyncStorage.setItem('stopList',JSON.stringify(stopList))
       .then(json => this.setState({stopList: stopList}))
       .catch(error => console.log('error!'));
@@ -156,7 +189,7 @@ export class NearbyStops extends Component{
 		var stopItems = this.state.nearbyStops.slice(0,20).map((stop) => <Text>{JSON.stringify(stop)}</Text>);
 		return (
 			<View>	
-				{ this.state.nearbyStops.length > 0 ? this.state.nearbyStops.slice(0,20).map((stop) => <Text>{JSON.stringify(stop)}</Text>) : <Spinner/> }
+				{ this.state.timesLoaded ? this.state.nearbyStops.slice(0,20).map((stop) => <Text key={stop.tag + stop.route + stop.direction}>{JSON.stringify(stop)}</Text>) : <Spinner/> }
 			</View>
 		);
 	}
@@ -165,13 +198,14 @@ export class NearbyStops extends Component{
 class Spinner extends Component {
 	render() {
 		return (
-			<View style = {{height: 500, flex: 1,
+			<View style = {{marginTop: 200, flex: 1,
     	justifyContent: 'center',
     	alignItems: 'center'}}>	
 	    <ActivityIndicator
 	       size="large"
-	       color="orange"
+	       color="#E59400"
 	     />
+	     <Text> Loading stops... </Text>
     </View>
 		);
 	}

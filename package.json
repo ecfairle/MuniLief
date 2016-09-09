@@ -7,10 +7,10 @@
   },
   "dependencies": {
     "react": "15.2.1",
-    "react-motion": "^0.4.4",
     "react-native": "0.31.0",
     "react-native-material-kit": "^0.3.2",
     "react-native-vector-icons": "^2.0.3",
+    "redux": "^3.6.0",
     "xmldom": "^0.1.22"
   }
 }
