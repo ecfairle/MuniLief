@@ -4,8 +4,10 @@ import {
 	View,
 	Text,
 	ListView,
+	ScrollView,
 	AsyncStorage,
-	ActivityIndicator
+	ActivityIndicator,
+	RefreshControl
 } from 'react-native';
 import {mdl, MKSpinner} from 'react-native-material-kit';
 
@@ -36,27 +38,6 @@ class Stop {
 	}
 }
 
-class Prediction extends Component {
-  render() {
-    var stop = this.props.stop;
-    predictions = setPredictions(stop.predictions);
-
-    return (
-      <li className="mdl-list__item mdl-list__item--three-line">
-        <span className="mdl-list__item-primary-content">
-        <i className="material-icons md-36 md-light mdl-list__item-avatar">directions_bus</i>
-          <span>
-            Route: {stop.route} -- {predictions.join(', ')}
-          </span>
-          <span className="mdl-list__item-text-body">
-            {stop.direction} at {stop.title}
-          </span>
-        </span>
-      </li>
-    );
-  }
-};
-
 getXmlFromApiAsync = function(url) {
   return fetch(url)
 	  .then((response) => response.text())
@@ -74,14 +55,15 @@ export class NearbyStops extends Component{
 	constructor(props) {
 		super(props);
 
-		const ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
+		this.ds = new ListView.DataSource({rowHasChanged: (r1, r2) => r1 !== r2});
 
 	  this.state = {
 	  	stopList : [],
 	  	nearbyStops : [],
 	  	currentPosition: 'unknown',
 	  	timesLoaded : false,
-	  	dataSource: ds.cloneWithRows(['row 1', 'row 2']),
+	  	dataSource: this.ds.cloneWithRows([]),
+	  	isRefreshing: false,
 	  };
 	  this._loadInitialState().then(() => this._setPredictions());
 	}
@@ -121,7 +103,9 @@ export class NearbyStops extends Component{
 			}
 			this.setState({ 
 				nearbyStops: stops,
-				timesLoaded: true
+				dataSource: this.ds.cloneWithRows(stops),
+				timesLoaded: true,
+				isRefreshing: false
 			});
 		})
 		.catch((error) => {
@@ -186,26 +170,54 @@ export class NearbyStops extends Component{
 	}  
 
 	render() {
-		var stopItems = this.state.nearbyStops.slice(0,20).map((stop) => <Text>{JSON.stringify(stop)}</Text>);
 		return (
-			<View>	
-				{ this.state.timesLoaded ? this.state.nearbyStops.slice(0,20).map((stop) => <Text key={stop.tag + stop.route + stop.direction}>{JSON.stringify(stop)}</Text>) : <Spinner/> }
-			</View>
+			<ScrollView
+			refreshControl={
+          <RefreshControl
+            refreshing={this.state.isRefreshing}
+            onRefresh={() => {this.setState({
+							isRefreshing: true
+						}); this._setPredictions();}}
+            title="Loading..."
+            colors={['orange', 'blue', '#ff0000']}
+          /> }>
+			{this.state.nearbyStops.length > 0 ?
+			<ListView
+				style={{flex:1}}
+        dataSource={this.state.dataSource}
+        renderRow={(stop) => stop.predictions!=null && stop.predictions.length > 0 ? <Row {...stop} /> : null}
+      />
+      : null
+    	}
+      { this.state.timesLoaded ? null : <Spinner text={"Loading Times..."}/>}
+    	</ScrollView>
 		);
 	}
 }
 
+const Row = (props) => (
+	<View style={{backgroundColor: 'white', marginBottom: 15}}>
+    <Text lineBreakMode="tail" numberOfLines={4} style={{fontSize: 19, fontFamily:'Lato-Regular', padding: 15}}>
+      <Text style={{fontFamily: 'Lato-Bold'}}>{props.route}{'\n'}</Text>{props.direction}{'\n'}
+      at {props.title}{'\n'}
+      <Text style={{fontFamily: 'Lato-Bold'}}>in {props.predictions.map((pred) => pred + ' min').join(', ')} </Text>
+    </Text>
+  </View>
+);
+
 class Spinner extends Component {
 	render() {
 		return (
-			<View style = {{marginTop: 200, flex: 1,
+			<View style = {{
+			marginTop:100,
+			flex: 1,
     	justifyContent: 'center',
     	alignItems: 'center'}}>	
 	    <ActivityIndicator
 	       size="large"
 	       color="#E59400"
 	     />
-	     <Text> Loading stops... </Text>
+	     <Text> {this.props.text} </Text>
     </View>
 		);
 	}
